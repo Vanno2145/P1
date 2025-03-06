@@ -1,66 +1,67 @@
-﻿using System;
-using System.Runtime.InteropServices;
+using System;
+using System.Threading;
+
+class Bank
+{
+    private decimal balance;
+    private readonly object locker = new object();
+
+    public Bank(decimal initialBalance)
+    {
+        balance = initialBalance;
+    }
+
+    public bool Withdraw(decimal amount)
+    {
+        bool success = false;
+        Monitor.Enter(locker);
+        try
+        {
+            if (balance >= amount)
+            {
+                Console.WriteLine($"{Thread.CurrentThread.Name} снял {amount:C}. Баланс до: {balance:C}");
+                Thread.Sleep(100); // Симуляция задержки транзакции
+                balance -= amount;
+                Console.WriteLine($"Баланс после: {balance:C}");
+                success = true;
+            }
+            else
+            {
+                Console.WriteLine($"{Thread.CurrentThread.Name}: Недостаточно средств!");
+            }
+        }
+        finally
+        {
+            Monitor.Exit(locker);
+        }
+        return success;
+    }
+}
 
 class Program
 {
-    
-    [DllImport("user32.dll", CharSet = CharSet.Auto)]
-    public static extern int MessageBox(IntPtr hWnd, string text, string caption, int type); 
-
     static void Main()
     {
-        for (; ; )
+        Bank bank = new Bank(500); // Начальный баланс
+        Thread[] atms = new Thread[5];
+
+        for (int i = 0; i < atms.Length; i++)
         {
-            Console.WriteLine("Загадайте число от 0 до 100 и нажмите Enter.");
-            Console.ReadLine(); 
-
-            int min = 0;
-            int max = 100;
-            int guess;
-            string response = "";
-
-            
-            while (true)
+            atms[i] = new Thread(() =>
             {
-                guess = (min + max) / 2;
-                Console.WriteLine($"Компьютер пытается угадать ваше число... Я думаю, что это {guess}");
-
-                Console.WriteLine("Ответьте 'меньше', 'больше' или 'угадал':");
-                response = Console.ReadLine().ToLower();
-
-                if (response == "меньше")
+                Random rand = new Random();
+                for (int j = 0; j < 3; j++)
                 {
-                    max = guess - 1;
+                    bank.Withdraw(rand.Next(50, 200));
                 }
-                else if (response == "больше")
-                {
-                    min = guess + 1;
-                }
-                else if (response == "угадал")
-                {
-                    
-                    MessageBox((IntPtr)null, $"Компьютер угадал ваше число! Это {guess}.", "Поздравляем!", 0);
-                    break;
-                }
-                else
-                {
-                    Console.WriteLine("Неверный ввод! Пожалуйста, введите 'меньше', 'больше' или 'угадал'.");
-                }
+            });
+            atms[i].Name = $"Банкомат {i + 1}";
+            atms[i].Start();
+        }
 
-                if (min > max)
-                {
-                    MessageBox((IntPtr)null, "Ваше число не в пределах от 0 до 100! Попробуйте еще раз.", "Ошибка!", 0);
-                    break;
-                }
-            }
-
-            Console.WriteLine("Хотите сыграть еще раз? (да/нет):");
-            string playAgain = Console.ReadLine().ToLower();
-
-            if (playAgain != "да")
-            {
-                break;
-            }
+        foreach (var atm in atms)
+        {
+            atm.Join();
         }
     }
 }
