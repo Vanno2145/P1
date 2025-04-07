@@ -1,37 +1,61 @@
 using System;
-using System.Net.Http;
-using System.Threading.Tasks;
+using Microsoft.Win32;
 
 class Program
 {
-    static async Task Main(string[] args)
+    const string registryPath = @"";
+
+    static void Main()
     {
-        // Ваши API-ключи для WeatherAPI и OpenWeatherMap
-        string weatherApiKey = "";
-        string openWeatherApiKey = "";
-        
-        // URL для запросов
-        string weatherApiUrl = $"https://api.weatherapi.com/v1/current.json?key={weatherApiKey}&q=London";
-        string openWeatherApiUrl = $"https://api.openweathermap.org/data/2.5/weather?q=London&appid={openWeatherApiKey}&units=metric";
+        Console.WriteLine("==== Настройки приложения ====");
 
-        // Создаём экземпляр HttpClient
-        var httpClient = new HttpClient();
+        // Чтение настроек из реестра
+        string username = ReadRegistryValue("Username", "Гость");
+        string themeColor = ReadRegistryValue("ThemeColor", "Синий");
 
-        // Выполняем запросы параллельно
-        var task1 = httpClient.GetStringAsync(weatherApiUrl);
-        var task2 = httpClient.GetStringAsync(openWeatherApiUrl);
+        Console.WriteLine($"Текущее имя пользователя: {username}");
+        Console.WriteLine($"Текущий цвет темы: {themeColor}");
 
-        // Ожидаем выполнения обеих задач
-        await Task.WhenAll(task1, task2);
+        Console.WriteLine("\nХотите изменить настройки? (y/n)");
+        string input = Console.ReadLine()?.ToLower();
 
-        // Получаем результаты
-        string weatherData1 = task1.Result;
-        string weatherData2 = task2.Result;
+        if (input == "y")
+        {
+            Console.Write("Введите новое имя пользователя: ");
+            username = Console.ReadLine();
 
-        // Выводим результаты
-        Console.WriteLine("WeatherAPI Response:");
-        Console.WriteLine(weatherData1);
-        Console.WriteLine("OpenWeatherMap Response:");
-        Console.WriteLine(weatherData2);
+            Console.Write("Введите цвет темы (например, Синий, Зелёный, Красный): ");
+            themeColor = Console.ReadLine();
+
+            WriteRegistryValue("Username", username);
+            WriteRegistryValue("ThemeColor", themeColor);
+
+            Console.WriteLine("✅ Настройки сохранены.");
+        }
+
+        Console.WriteLine("\nНажмите любую клавишу для выхода...");
+        Console.ReadKey();
+    }
+
+    static string ReadRegistryValue(string key, string defaultValue)
+    {
+        using (RegistryKey regKey = Registry.CurrentUser.OpenSubKey(registryPath))
+        {
+            if (regKey != null)
+            {
+                object value = regKey.GetValue(key);
+                if (value != null)
+                    return value.ToString();
+            }
+        }
+        return defaultValue;
+    }
+
+    static void WriteRegistryValue(string key, string value)
+    {
+        using (RegistryKey regKey = Registry.CurrentUser.CreateSubKey(registryPath))
+        {
+            regKey.SetValue(key, value);
+        }
     }
 }
