@@ -1,90 +1,90 @@
 using System;
-using System.Net.Http;
-using System.Text.Json;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
-using System.Windows.Forms;
-using System.Drawing;
+using MailKit.Net.Smtp;
+using MimeKit;
 
-namespace DiceGame
+namespace EmailSenderApp
 {
-    public class DiceForm : Form
+    class Program
     {
-        Button rollButton;
-        PictureBox player1Dice;
-        PictureBox player2Dice;
-        Label resultLabel;
-        ComboBox modeSelector;
-        HttpClient client = new HttpClient();
-        string apiKey = "";
-
-        public DiceForm()
+        static async Task Main(string[] args)
         {
-            Text = "Игра в кости";
-            Size = new Size(300, 250);
+            Console.WriteLine("Консольное приложение для отправки email");
 
-            modeSelector = new ComboBox { Location = new Point(10, 10), Width = 150 };
-            modeSelector.Items.AddRange(new[] { "Человек vs Человек", "Человек vs Компьютер" });
-            modeSelector.SelectedIndex = 0;
-            Controls.Add(modeSelector);
+            
+            Console.Write("Введите адрес электронной почты отправителя: ");
+            string senderEmail = Console.ReadLine();
+            Console.Write("Введите пароль отправителя: ");
+            string senderPassword = Console.ReadLine();
 
-            rollButton = new Button { Text = "Бросить", Location = new Point(170, 10) };
-            rollButton.Click += async (s, e) => await RollDice();
-            Controls.Add(rollButton);
-
-            player1Dice = new PictureBox { Location = new Point(30, 50), Size = new Size(80, 80) };
-            player2Dice = new PictureBox { Location = new Point(160, 50), Size = new Size(80, 80) };
-            Controls.Add(player1Dice);
-            Controls.Add(player2Dice);
-
-            resultLabel = new Label { Location = new Point(10, 150), AutoSize = true };
-            Controls.Add(resultLabel);
-        }
-
-        async Task RollDice()
-        {
-            int d1 = await GetNumber();
-            int d2 = modeSelector.SelectedIndex == 0 ? await GetNumber() : new Random().Next(1, 7);
-
-            await Animate(player1Dice, d1);
-            await Animate(player2Dice, d2);
-
-            if (d1 > d2) resultLabel.Text = "Игрок 1 выиграл!";
-            else if (d2 > d1) resultLabel.Text = "Игрок 2 выиграл!";
-            else resultLabel.Text = "Ничья!";
-        }
-
-        async Task<int> GetNumber()
-        {
-            var req = new
+            
+            Console.Write("Введите адрес SMTP сервера (например, smtp.gmail.com): ");
+            string smtpServer = Console.ReadLine();
+            Console.Write("Введите порт SMTP сервера (например, 587 для TLS, 465 для SSL): ");
+            if (!int.TryParse(Console.ReadLine(), out int smtpPort))
             {
-                jsonrpc = "2.0",
-                method = "generateIntegers",
-                @params = new { apiKey = apiKey, n = 1, min = 1, max = 6 },
-                id = 1
-            };
-
-            var content = new StringContent(JsonSerializer.Serialize(req));
-            var res = await client.PostAsync("https://api.random.org/json-rpc/4/invoke", content);
-            var json = await res.Content.ReadAsStringAsync();
-            using var doc = JsonDocument.Parse(json);
-            return doc.RootElement.GetProperty("result").GetProperty("random").GetProperty("data")[0].GetInt32();
-        }
-
-        async Task Animate(PictureBox box, int value)
-        {
-            for (int i = 0; i < 5; i++)
-            {
-                int temp = new Random().Next(1, 7);
-                box.Image = Image.FromFile($"dice{temp}.png");
-                await Task.Delay(50);
+                Console.WriteLine("Некорректный порт. Завершение работы.");
+                return;
             }
-            box.Image = Image.FromFile($"dice{value}.png");
+            Console.Write("Использовать SSL/TLS (true/false)? ");
+            if (!bool.TryParse(Console.ReadLine(), out bool useSsl))
+            {
+                Console.WriteLine("Некорректный ввод. Завершение работы.");
+                return;
+            }
+
+          
+            Console.Write("Введите тему письма: ");
+            string subject = Console.ReadLine();
+
+           
+            Console.WriteLine("Введите текст письма:");
+            string body = Console.ReadLine();
+
+           
+            Console.Write("Введите список получателей (через запятую): ");
+            string recipientsInput = Console.ReadLine();
+            List<string> recipients = recipientsInput.Split(',').Select(r => r.Trim()).ToList();
+
+            
+            try
+            {
+                await SendEmailAsync(senderEmail, senderPassword, smtpServer, smtpPort, useSsl, subject, body, recipients);
+                Console.WriteLine("Письма успешно отправлены!");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Произошла ошибка при отправке: {ex.Message}");
+            }
+
+            Console.WriteLine("\nНажмите любую клавишу для выхода...");
+            Console.ReadKey();
         }
 
-        [STAThread]
-        static void Main()
+        static async Task SendEmailAsync(string senderEmail, string senderPassword, string smtpServer, int smtpPort, bool useSsl, string subject, string body, List<string> recipients)
         {
-            Application.Run(new DiceForm());
+            var message = new MimeMessage();
+            message.From.Add(new MailboxAddress("", senderEmail));
+            foreach (var recipient in recipients)
+            {
+                message.To.Add(new MailboxAddress("", recipient));
+            }
+            message.Subject = subject;
+            message.Body = new TextPart("plain") { Text = body };
+
+            using (var client = new SmtpClient())
+            {
+                await client.ConnectAsync(smtpServer, smtpPort, useSsl);
+
+             
+                await client.AuthenticateAsync(senderEmail, senderPassword);
+
+                await client.SendAsync(message);
+
+                await client.DisconnectAsync(true);
+            }
         }
     }
 }
